@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import AddressSearch from '../components/AddressSearch'
 import AuthCard from '../components/AuthCard'
 import Banner from '../components/Banner'
 import Field from '../components/Field'
@@ -12,6 +13,7 @@ const EMPTY = {
   passwordConfirm: '',
   email: '',
   name: '',
+  birth: '',
   postcode: '',
   address: '',
   addressDetail: '',
@@ -28,6 +30,18 @@ export default function Signup() {
   const [idCheck, setIdCheck] = useState(null) // { ok, message }
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [searching, setSearching] = useState(false)
+  // 검색 스크립트를 못 불러온 경우에만 우편번호·주소를 직접 타이핑할 수 있게 연다.
+  const [manualAddress, setManualAddress] = useState(false)
+
+  const closeSearch = useCallback(() => setSearching(false), [])
+
+  const applyAddress = useCallback(({ postcode, address }) => {
+    setForm((prev) => ({ ...prev, postcode, address }))
+    setErrors((prev) => ({ ...prev, postcode: '', address: '' }))
+    // 주소가 채워졌으니 바로 상세주소를 입력하도록 포커스를 옮긴다.
+    requestAnimationFrame(() => document.getElementById('su-addr2')?.focus())
+  }, [])
 
   function set(key, value) {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -40,11 +54,12 @@ export default function Signup() {
       userId: rules.userId(form.userId),
       password: rules.password(form.password),
       passwordConfirm: form.password !== form.passwordConfirm ? '비밀번호가 일치하지 않습니다.' : '',
-      email: rules.email(form.email),
+      email: rules.emailOptional(form.email),
       name: rules.name(form.name),
+      birth: rules.birth(form.birth),
       postcode: rules.postcode(form.postcode),
       address: rules.address(form.address),
-      phone: rules.phone(form.phone),
+      phone: rules.phoneOptional(form.phone),
     }
     setErrors(next)
     return Object.values(next).every((v) => !v)
@@ -183,26 +198,42 @@ export default function Signup() {
             />
           </Field>
 
-          <Field
-            label="연락처"
-            htmlFor="su-phone"
-            required
-            error={errors.phone}
-            hint="숫자만 입력하면 자동으로 하이픈이 붙습니다."
-          >
+          <Field label="생년월일" htmlFor="su-birth" required error={errors.birth}>
             <input
-              id="su-phone"
+              id="su-birth"
               className="input"
-              inputMode="numeric"
-              value={form.phone}
-              onChange={(e) => set('phone', formatPhone(e.target.value))}
-              autoComplete="tel"
-              placeholder="010-1234-5678"
+              type="date"
+              max={new Date().toISOString().slice(0, 10)}
+              value={form.birth}
+              onChange={(e) => set('birth', e.target.value)}
+              autoComplete="bday"
             />
           </Field>
         </div>
 
-        <Field label="이메일" htmlFor="su-email" required error={errors.email}>
+        <Field
+          label="연락처 (선택)"
+          htmlFor="su-phone"
+          error={errors.phone}
+          hint="숫자만 입력하면 자동으로 하이픈이 붙습니다."
+        >
+          <input
+            id="su-phone"
+            className="input"
+            inputMode="numeric"
+            value={form.phone}
+            onChange={(e) => set('phone', formatPhone(e.target.value))}
+            autoComplete="tel"
+            placeholder="010-1234-5678"
+          />
+        </Field>
+
+        <Field
+          label="이메일 (선택)"
+          htmlFor="su-email"
+          error={errors.email}
+          hint="입력하지 않으면 아이디·비밀번호 찾기를 이용할 수 없습니다."
+        >
           <input
             id="su-email"
             className="input"
@@ -214,15 +245,31 @@ export default function Signup() {
           />
         </Field>
 
-        <Field label="우편번호" htmlFor="su-zip" required error={errors.postcode}>
+        <Field
+          label="우편번호"
+          htmlFor="su-zip"
+          required
+          error={errors.postcode}
+          hint={manualAddress ? '검색을 쓸 수 없어 직접 입력 모드입니다.' : '검색 버튼을 눌러 주소를 찾아주세요.'}
+          addon={
+            <button
+              type="button"
+              className="btn btn--outline btn--inline"
+              onClick={() => setSearching(true)}
+            >
+              주소 검색
+            </button>
+          }
+        >
           <input
             id="su-zip"
-            className="input input--short"
+            className="input"
             inputMode="numeric"
             value={form.postcode}
             onChange={(e) => set('postcode', e.target.value.replace(/\D/g, '').slice(0, 5))}
+            readOnly={!manualAddress}
             autoComplete="postal-code"
-            placeholder="06234"
+            placeholder="검색으로 입력"
           />
         </Field>
 
@@ -232,8 +279,9 @@ export default function Signup() {
             className="input"
             value={form.address}
             onChange={(e) => set('address', e.target.value)}
+            readOnly={!manualAddress}
             autoComplete="street-address"
-            placeholder="서울특별시 강남구 테헤란로 123"
+            placeholder="검색으로 입력"
           />
         </Field>
 
@@ -262,6 +310,14 @@ export default function Signup() {
           {busy ? '가입 처리 중…' : '가입하기'}
         </button>
       </form>
+
+      {searching && (
+        <AddressSearch
+          onSelect={applyAddress}
+          onClose={closeSearch}
+          onUnavailable={() => setManualAddress(true)}
+        />
+      )}
     </AuthCard>
   )
 }

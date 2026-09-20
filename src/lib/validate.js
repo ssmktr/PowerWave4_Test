@@ -1,3 +1,5 @@
+import { parseBirth } from './birthday.js'
+
 export const rules = {
   userId: (v) => {
     if (!v.trim()) return '아이디를 입력해주세요.'
@@ -10,8 +12,13 @@ export const rules = {
     if (!/[a-zA-Z]/.test(v) || !/[0-9]/.test(v)) return '영문과 숫자를 모두 포함해주세요.'
     return ''
   },
+  // 아이디·비밀번호 찾기에서는 이메일이 반드시 필요하므로 required 버전을 따로 둔다.
   email: (v) => {
     if (!v.trim()) return '이메일을 입력해주세요.'
+    return rules.emailOptional(v)
+  },
+  emailOptional: (v) => {
+    if (!v.trim()) return ''
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim())) return '이메일 형식이 올바르지 않습니다.'
     return ''
   },
@@ -20,9 +27,17 @@ export const rules = {
     if (v.trim().length < 2) return '2자 이상 입력해주세요.'
     return ''
   },
-  phone: (v) => {
-    if (!v.trim()) return '연락처를 입력해주세요.'
+  phoneOptional: (v) => {
+    if (!v.trim()) return ''
     if (!/^01[016789]-\d{3,4}-\d{4}$/.test(v.trim())) return '010-1234-5678 형식으로 입력해주세요.'
+    return ''
+  },
+  birth: (v) => {
+    if (!v.trim()) return '생년월일을 입력해주세요.'
+    const date = parseBirth(v)
+    if (!date) return '올바른 날짜가 아닙니다.'
+    if (date > new Date()) return '미래 날짜는 입력할 수 없습니다.'
+    if (date.getFullYear() < 1900) return '1900년 이후로 입력해주세요.'
     return ''
   },
   address: (v) => (v.trim() ? '' : '주소를 입력해주세요.'),

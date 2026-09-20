@@ -28,7 +28,7 @@ export default function Login({ onLogin }) {
     try {
       const user = await login(userId, password)
       onLogin(user)
-      navigate('/home', { replace: true })
+      navigate('/main', { replace: true })
     } catch (err) {
       setError(err.message)
     } finally {

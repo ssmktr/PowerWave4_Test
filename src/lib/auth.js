@@ -6,6 +6,9 @@ const SESSION_KEY = 'pw4.session'
 
 const delay = (ms = 350) => new Promise((resolve) => setTimeout(resolve, ms))
 
+const NO_MATCH =
+  '일치하는 회원 정보가 없습니다. 이메일 없이 가입한 계정은 아이디·비밀번호 찾기를 이용할 수 없습니다.'
+
 function readUsers() {
   try {
     const raw = localStorage.getItem(USERS_KEY)
@@ -41,15 +44,18 @@ export async function signUp(form) {
   if (users.some((u) => u.userId.toLowerCase() === userId.toLowerCase())) {
     throw new Error('이미 사용 중인 아이디입니다.')
   }
-  if (users.some((u) => u.email.toLowerCase() === form.email.trim().toLowerCase())) {
+  // 이메일은 선택 항목이라 비어 있을 수 있다. 빈 값끼리는 중복으로 보지 않는다.
+  const email = form.email.trim()
+  if (email && users.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
     throw new Error('이미 가입된 이메일입니다.')
   }
 
   const user = {
     userId,
     passwordHash: await hash(form.password),
-    email: form.email.trim(),
+    email,
     name: form.name.trim(),
+    birth: form.birth.trim(),
     postcode: form.postcode.trim(),
     address: form.address.trim(),
     addressDetail: form.addressDetail.trim(),
@@ -92,22 +98,28 @@ export function getSession() {
 
 export async function findUserId(name, email) {
   await delay()
-  const user = readUsers().find(
-    (u) => u.name === name.trim() && u.email.toLowerCase() === email.trim().toLowerCase(),
-  )
-  if (!user) throw new Error('일치하는 회원 정보가 없습니다.')
+  const target = email.trim().toLowerCase()
+  // 이메일 없이 가입한 계정이 빈 문자열로 매칭되지 않도록 막는다.
+  const user = target
+    ? readUsers().find((u) => u.name === name.trim() && u.email && u.email.toLowerCase() === target)
+    : null
+  if (!user) throw new Error(NO_MATCH)
   return { userId: maskUserId(user.userId), createdAt: user.createdAt }
 }
 
 export async function resetPassword(userId, email) {
   await delay()
   const users = readUsers()
-  const index = users.findIndex(
-    (u) =>
-      u.userId.toLowerCase() === userId.trim().toLowerCase() &&
-      u.email.toLowerCase() === email.trim().toLowerCase(),
-  )
-  if (index === -1) throw new Error('일치하는 회원 정보가 없습니다.')
+  const target = email.trim().toLowerCase()
+  const index = target
+    ? users.findIndex(
+        (u) =>
+          u.userId.toLowerCase() === userId.trim().toLowerCase() &&
+          u.email &&
+          u.email.toLowerCase() === target,
+      )
+    : -1
+  if (index === -1) throw new Error(NO_MATCH)
 
   const tempPassword = makeTempPassword()
   users[index] = { ...users[index], passwordHash: await hash(tempPassword) }
@@ -115,6 +127,21 @@ export async function resetPassword(userId, email) {
 
   // 실제 서비스라면 메일로 발송한다. MVP에서는 화면에 바로 보여준다.
   return { tempPassword }
+}
+
+/** 반친구 목록. 비밀번호와 주소 등 민감한 항목은 빼고 명단에 필요한 것만 넘긴다. */
+export async function listClassmates() {
+  await delay(250)
+  return readUsers()
+    .map(({ userId, name, birth, phone, email, createdAt }) => ({
+      userId,
+      name,
+      birth,
+      phone,
+      email,
+      createdAt,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
 }
 
 function publicUser({ passwordHash, ...rest }) {
